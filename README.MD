@@ -98,11 +98,6 @@ X-Token: YOUR_TOKEN
 - **首页**: `https://your-worker.workers.dev/` - 备忘录列表和创建
 - **详情页**: `https://your-worker.workers.dev/m/:id` - 备忘录详情和编辑
 
-## 📚 详细文档
-
-- [部署指南](./DEPLOY.md) - 详细的部署说明和配置
-- [开发文档](./DEVELOPMENT.md) - 开发指南和扩展功能
-
 ## 🏗️ 技术架构
 
 ```
