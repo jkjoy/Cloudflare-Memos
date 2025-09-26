@@ -1,0 +1,33 @@
+name = "memosnew"
+main = "src/index.js"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
+[env.development.vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "memos_db"
+database_id = "437a3815-ae40-4337-83f7-fde6f2487718"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "memos"
+
+[vars]
+# Gravatar CDN代理配置（支持国内访问）
+# 可以设置为国内可访问的CDN代理，如：
+# GRAVATAR_CDN = "https://gravatar.loli.net"
+# GRAVATAR_CDN = "https://cdn.v2ex.com/gravatar"
+# GRAVATAR_CDN = "https://sdn.geekzu.org/avatar"
+GRAVATAR_CDN = "https://gravatar.loli.net"
+
+# R2存储的公共域名
+R2_DOMAIN = "img.memos.ee"
+
+# TOKEN will be set via: wrangler secret put TOKEN
+# Set your authentication token using: wrangler secret put TOKEN
