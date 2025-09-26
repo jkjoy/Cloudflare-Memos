@@ -25,7 +25,7 @@ router.get('List', async (request) => {
     
     const stmt = db.prepare(`
       SELECT r.id, r.filename, r.filepath, r.type, r.size, r.created_ts,
-             u.username as creator_username, u.name as creator_name
+             u.username as creator_username, u.nickname as creator_name
       FROM resources r
       LEFT JOIN users u ON r.creator_id = u.id
       ORDER BY r.created_ts DESC

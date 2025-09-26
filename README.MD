@@ -135,10 +135,6 @@ memosnew/
 ├── schema.sql            # 数据库结构
 ├── wrangler.toml         # Workers 配置
 ├── package.json          # 项目依赖
-├── deploy.sh             # Linux/macOS 部署脚本
-├── deploy.ps1            # Windows 部署脚本
-├── DEPLOY.md             # 部署文档
-└── DEVELOPMENT.md        # 开发文档
 ```
 
 ## 🔧 本地开发
@@ -187,4 +183,3 @@ MIT License
 - [Cloudflare D1](https://developers.cloudflare.com/d1/) - 无服务器数据库
 - [Cloudflare R2](https://developers.cloudflare.com/r2/) - 对象存储服务
 - [itty-router](https://github.com/kwhitley/itty-router) - 轻量级路由器
-

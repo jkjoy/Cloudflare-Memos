@@ -235,14 +235,14 @@ router.post('/', async (request) => {
       const userCheck = await db.prepare('SELECT COUNT(*) as count FROM users').first();
       
       if (userCheck.count === 0) {
-        // 创建第一个用户（管理员）- 使用中文名称
+        // 创建第一个用户（管理员）
         const userStmt = db.prepare(`
-          INSERT INTO users (username, name, nickname, password_hash, is_admin) 
-          VALUES (?, ?, ?, ?, 1)
+          INSERT INTO users (username, nickname, password_hash, is_admin) 
+          VALUES (?, ?, ?, 1)
         `);
         // 使用默认密码 'admin123'
         const defaultPasswordHash = await hashPassword('admin123');
-        const userResult = await userStmt.bind('admin', '管理员', '管理员', defaultPasswordHash).run();
+        const userResult = await userStmt.bind('admin', '管理员', defaultPasswordHash).run();
         creatorId = userResult.meta.last_row_id;
       } else {
         creatorId = 1; // 默认使用第一个用户

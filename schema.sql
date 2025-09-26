@@ -1,5 +1,6 @@
 -- 设置 UTF-8 编码
 PRAGMA encoding = 'UTF-8';
+PRAGMA foreign_keys = ON;
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_memos_creator_id ON memos(creator_id);
 CREATE INDEX IF NOT EXISTS idx_memos_created_ts ON memos(created_ts);
 CREATE INDEX IF NOT EXISTS idx_memos_visibility ON memos(visibility);
+-- 常用排序字段 display_ts 也加索引
+CREATE INDEX IF NOT EXISTS idx_memos_display_ts ON memos(display_ts);
 CREATE INDEX IF NOT EXISTS idx_resources_creator_id ON resources(creator_id);
 
 -- 插入默认管理员用户（第一个注册用户将自动成为管理员）
--- 这里仅作为示例，实际会在应用代码中处理

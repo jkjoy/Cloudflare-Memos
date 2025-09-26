@@ -231,63 +231,6 @@ function getGravatarUrl(email, size = 40, request = null) {
   return `${gravatarCdn}/avatar/${hash}?s=${size}&d=identicon`;
 }
 
-// 通用作者信息块（支持可选链接）
-function renderAuthorBlock(avatarUrl, name, username, pinned = false, userId = null) {
-  const inner = `
-    <img src="${avatarUrl}" alt="头像" class="avatar">
-    <div class="author-info">
-      <div class="author-name">${name || '匿名'}</div>
-      <div class="author-username">@${username || 'user'}</div>
-    </div>
-  `;
-  const wrapped = userId
-    ? `<a href="/user/${userId}" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit;">${inner}</a>`
-    : inner;
-  return `
-    <div class="memo-author">
-      ${wrapped}
-      ${pinned ? '<span style="color: #ff9800; margin-left: 8px;">📌</span>' : ''}
-    </div>
-  `;
-}
-
-// 资源链接href选择
-function getResourceHref(resource) {
-  return resource?.externalLink || resource?.filepath || '#';
-}
-
-// 资源列表（行内简洁样式）
-function renderResourceInline(resourceList) {
-  if (!Array.isArray(resourceList) || resourceList.length === 0) return '';
-  return `
-    <div class="memo-resources">
-      ${resourceList.map(resource => `
-        <a href="${getResourceHref(resource)}" class="resource-item" target="_blank">📎 ${resource.filename}</a>
-      `).join('')}
-    </div>
-  `;
-}
-
-// 资源列表（网格详细样式）只返回items，外层自行包裹resource-grid
-function renderResourceGridItems(resourceList) {
-  if (!Array.isArray(resourceList) || resourceList.length === 0) return '';
-  return resourceList.map(resource => `
-    <a href="${getResourceHref(resource)}" class="resource-item" target="_blank">
-      <div class="resource-filename">${resource.filename}</div>
-      <div class="resource-type">${resource.type || '未知类型'} ${resource.size ? `(${(resource.size / 1024).toFixed(1)} KB)` : ''}</div>
-    </a>
-  `).join('');
-}
-
-// 通用作者样式，避免各页重复定义
-const COMMON_AUTHOR_CSS = `
-.memo-author { display: flex; align-items: center; gap: 8px; }
-.avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-.author-info { display: flex; flex-direction: column; }
-.author-name { font-weight: 500; color: #2c3e50; font-size: 14px; }
-.author-username { font-size: 12px; color: #999; }
-`;
-
 async function getMemoListHTML(request) {
   try {
     // 直接访问数据库获取memo数据，包含邮箱用于头像生成
@@ -343,26 +286,37 @@ async function getMemoListHTML(request) {
     let memoListHTML = '';
     if (Array.isArray(memos) && memos.length > 0) {
       memoListHTML = memos.map(memo => {
-        const authorBlock = renderAuthorBlock(
-          getGravatarUrl(memo.creatorEmail, 32, request),
-          memo.creatorName || memo.creatorUsername,
-          memo.creatorUsername,
-          Boolean(memo.pinned),
-          memo.creatorId
-        );
-        const resourcesHTML = renderResourceInline(memo.resourceList);
-        return `
-        <div class="memo-item ${memo.pinned ? 'pinned' : ''}">
-          <div class="memo-header">
-            ${authorBlock}
-            <div class="memo-time">${new Date(memo.createdTs * 1000).toLocaleString('zh-CN')}</div>
-          </div>
-          <div class="memo-content">${memo.content}</div>
-          ${resourcesHTML}
-          <div class="memo-actions">
-            <a href="/m/${memo.id}" class="btn">查看详情</a>
-          </div>
-        </div>`;
+        const resourcesHTML = memo.resourceList && memo.resourceList.length > 0 ? 
+          '<div class="memo-resources">' +
+            memo.resourceList.map(resource => 
+              '<a href="' + resource.filepath + '" class="resource-item" target="_blank">' +
+                '📎 ' + resource.filename +
+              '</a>'
+            ).join('') +
+          '</div>' : '';
+        
+        return '<div class="memo-item ' + (memo.pinned ? 'pinned' : '') + '">' +
+          '<div class="memo-header">' +
+            '<div class="memo-author">' +
+              '<a href="/user/' + memo.creatorId + '" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit;">' +
+                '<img src="' + getGravatarUrl(memo.creatorEmail, 32, request) + '" alt="头像" class="avatar">' +
+                '<div class="author-info">' +
+                  '<div class="author-name">' + (memo.creatorName || memo.creatorUsername || '匿名') + '</div>' +
+                  '<div class="author-username">@' + memo.creatorUsername + '</div>' +
+                '</div>' +
+              '</a>' +
+              (memo.pinned ? '<span style="color: #ff9800; margin-left: 8px;">📌</span>' : '') +
+            '</div>' +
+            '<div class="memo-time">' +
+              new Date(memo.createdTs * 1000).toLocaleString('zh-CN') +
+            '</div>' +
+          '</div>' +
+          '<div class="memo-content">' + memo.content + '</div>' +
+          resourcesHTML +
+          '<div class="memo-actions">' +
+            '<a href="/m/' + memo.id + '" class="btn">查看详情</a>' +
+          '</div>' +
+        '</div>';
       }).join('');
     } else {
       memoListHTML = '<div class="empty-state">' +
@@ -439,7 +393,34 @@ async function getMemoListHTML(request) {
             border-bottom: 1px solid #eee;
         }
         
-        ${COMMON_AUTHOR_CSS}
+        .memo-author {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .author-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .author-name {
+            font-weight: 500;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        .author-username {
+            font-size: 12px;
+            color: #999;
+        }
         
         .memo-time {
             color: #999;
@@ -2785,7 +2766,14 @@ async function getMemoDetailHTML(request, memoId) {
         <div class="memo-detail">
             <div class="memo-meta">
                 <div>
-                    ${renderAuthorBlock(avatarUrl, memo.creatorName || memo.creatorUsername, memo.creatorUsername, Boolean(memo.pinned), memo.creatorId)}
+                    <div class="memo-author">
+                        <img src="${avatarUrl}" alt="头像" class="avatar">
+                        <div class="author-info">
+                            <div class="author-name">${memo.creatorName || memo.creatorUsername || '匿名'}</div>
+                            <div class="author-username">@${memo.creatorUsername || 'user'}</div>
+                        </div>
+                        ${memo.pinned ? '<span style="color: #ff9800;">📌</span>' : ''}
+                    </div>
                 </div>
                 <div class="memo-time">
                     创建于: ${new Date(memo.createdTs * 1000).toLocaleString('zh-CN')}<br>
@@ -3422,7 +3410,7 @@ async function getUserPageHTML(request, userId) {
 <body>
     <div class="container">
         <div class="user-header">
-            <img src="${getGravatarUrl(user.email, 80)}" alt="${user.nickname}的头像" class="user-avatar">
+            <img src="${getGravatarUrl(user.email, 80, request)}" alt="${user.nickname}的头像" class="user-avatar">
             <div class="user-name">
                 ${user.nickname}
                 ${user.is_admin ? '<span class="admin-badge">管理员</span>' : ''}

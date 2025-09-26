@@ -60,15 +60,6 @@ router.post('/', async (request) => {
     const userCountStmt = db.prepare('SELECT COUNT(*) as count FROM users');
     const userCount = await userCountStmt.first();
     const isFirstUser = userCount.count === 0;
-
-    // 若不是首个用户，需认证（管理员会话或服务端TOKEN）
-    if (!isFirstUser) {
-      const authError = await requireAuth(request);
-      if (authError) return authError;
-      if (request.user && !request.user.isAdmin) {
-        return errorResponse('Only admin can create users', 403);
-      }
-    }
     
     // 检查用户名是否已存在
     const existingUserStmt = db.prepare('SELECT id FROM users WHERE username = ?');
@@ -82,17 +73,16 @@ router.post('/', async (request) => {
     const hashedPassword = await hashPassword(body.password);
     
     const stmt = db.prepare(`
-      INSERT INTO users (username, name, nickname, password_hash, email, is_admin)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO users (username, nickname, password_hash, email, is_admin)
+      VALUES (?, ?, ?, ?, ?)
     `);
     
     const result = await stmt.bind(
       body.username,
-      body.nickname, // 同时填入name字段以兼容
       body.nickname,
       hashedPassword,
       body.email || null,
-      isFirstUser ? 1 : 0  // 第一个用户自动成为管理员
+      isFirstUser ? 1 : 0
     ).run();
     
     return jsonResponse({
