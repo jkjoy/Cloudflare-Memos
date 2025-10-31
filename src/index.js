@@ -1,72 +1,143 @@
-import { Router } from 'itty-router';
-import { handleMemoRoutes } from './handlers/memos';
-import { handleUserRoutes } from './handlers/users';
-import { handleResourceRoutes } from './handlers/resources';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import memosApp from './handlers/memos';
+import usersApp from './handlers/users';
+import resourcesApp from './handlers/resources';
+import settingsApp from './handlers/settings';
+import rssApp from './handlers/rss';
 import { handleWebRoutes } from './handlers/web';
-import { corsHeaders, handleCORS } from './utils/cors';
+import faviconData from './favicon.ico';
 
-const router = Router();
+const app = new Hono();
 
-// CORS 预检请求
-router.options('*', handleCORS);
-
-// API 路由
-router.all('/api/v1/memo/*', handleMemoRoutes);
-router.all('/api/v1/memo', handleMemoRoutes);
-router.all('/api/v1/user/*', handleUserRoutes);
-router.all('/api/v1/user', handleUserRoutes);
-router.post('/api/v1/user/login', handleUserRoutes);  // 登录路由
-router.all('/api/v1/resource/*', handleResourceRoutes);
-router.all('/api/v1/resourceList', handleResourceRoutes);
-
-// 前端页面路由
-router.get('/', handleWebRoutes);
-router.get('/login', handleWebRoutes);
-router.get('/register', handleWebRoutes);
-router.get('/profile', handleWebRoutes);
-router.get('/user/:id', handleWebRoutes);
-router.get('/m/:id', handleWebRoutes);
-
-// 404 处理
-router.all('*', () => new Response('Not Found', { 
-  status: 404,
-  headers: {
-    'Content-Type': 'text/plain; charset=utf-8',
-    ...corsHeaders
-  }
+// CORS 中间件
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  exposeHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 600,
+  credentials: true,
 }));
 
-export default {
-  async fetch(request, env, ctx) {
+// 挂载 API 路由
+app.route('/api/v1/memo', memosApp);
+app.route('/api/v1/user', usersApp);
+app.route('/api/v1/resource', resourcesApp);
+app.route('/api/v1/settings', settingsApp);
+
+// RSS 路由
+app.route('/', rssApp);
+
+// Favicon 路由
+app.get('/favicon.ico', (c) => {
+  return new Response(faviconData, {
+    headers: {
+      'Content-Type': 'image/x-icon',
+      'Cache-Control': 'public, max-age=31536000',
+    },
+  });
+});
+
+// 前端页面路由
+app.get('/', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/login', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/register', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/profile', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/settings', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/search', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/explore', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/tag/:name', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+// Redirect uppercase /Profile to lowercase /profile
+app.get('/Profile', async (c) => {
+  return c.redirect('/profile', 301);
+});
+
+app.get('/user/:id', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/m/:id', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+app.get('/edit/:id', async (c) => {
+  return await handleWebRoutes(c.req.raw, c.env);
+});
+
+// 直接文件访问路由：/:filename (例如: /2_1761140800100.jpeg)
+// 这个路由需要放在最后，作为通配符处理文件请求
+app.get('/:filename', async (c) => {
+  const filename = c.req.param('filename');
+
+  // 检查文件名格式是否匹配：用户ID_时间戳.后缀
+  if (filename && filename.match(/^\d+_\d+\.\w+$/)) {
     try {
-      // 为所有处理器提供环境变量
-      request.env = env;
-      
-      const response = await router.handle(request);
-      
-      // 确保所有响应都包含CORS头
-      const newResponse = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
+      const bucket = c.env.BUCKET;
+
+      // 从 R2 获取文件
+      const object = await bucket.get(filename);
+
+      if (!object) {
+        return c.text('File not found', 404);
+      }
+
+      // 获取文件的 MIME 类型
+      const contentType = object.httpMetadata?.contentType || 'application/octet-stream';
+
+      // 返回文件内容
+      return new Response(object.body, {
         headers: {
-          ...response.headers,
-          ...corsHeaders
-        }
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=31536000',
+        },
       });
-      
-      return newResponse;
     } catch (error) {
-      console.error('Worker error:', error);
-      return new Response(JSON.stringify({ 
-        error: 'Internal Server Error',
-        message: error.message 
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          ...corsHeaders
-        }
-      });
+      console.error('Error serving file:', error);
+      return c.text('Error serving file', 500);
     }
   }
-};
+
+  // 如果不匹配文件格式，返回 404
+  return c.text('Not Found', 404);
+});
+
+// 404 处理
+app.notFound((c) => {
+  return c.text('Not Found', 404);
+});
+
+// 全局错误处理
+app.onError((err, c) => {
+  console.error('Worker error:', err);
+  return c.json({
+    error: 'Internal Server Error',
+    message: err.message
+  }, 500);
+});
+
+export default app;

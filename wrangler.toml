@@ -3,6 +3,12 @@ main = "src/index.js"
 compatibility_date = "2024-01-15"
 compatibility_flags = ["nodejs_compat"]
 
+# 配置文件导入规则
+[[rules]]
+type = "Data"
+globs = ["**/*.ico"]
+fallthrough = true
+
 [env.production.vars]
 ENVIRONMENT = "production"
 
@@ -25,9 +31,3 @@ bucket_name = "memos"
 # GRAVATAR_CDN = "https://cdn.v2ex.com/gravatar"
 # GRAVATAR_CDN = "https://sdn.geekzu.org/avatar"
 GRAVATAR_CDN = "https://gravatar.loli.net"
-
-# R2存储的公共域名
-R2_DOMAIN = "img.memos.ee"
-
-# TOKEN will be set via: wrangler secret put TOKEN
-# Set your authentication token using: wrangler secret put TOKEN

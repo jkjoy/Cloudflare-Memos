@@ -13,14 +13,19 @@
     "db:local": "wrangler d1 execute memos_db --local --file=./schema.sql",
     "fix:encoding": "wrangler d1 execute memos_db --file=./fix-encoding.sql"
   },
-  "dependencies": {
-    "itty-router": "^4.0.25"
-  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
     "wrangler": "^3.22.1"
   },
-  "keywords": ["cloudflare", "workers", "memo", "api"],
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "memo",
+    "api"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.10.1"
+  }
 }

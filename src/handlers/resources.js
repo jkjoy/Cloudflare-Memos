@@ -1,27 +1,17 @@
-import { Router } from 'itty-router';
-import { requireAuth, jsonResponse, errorResponse } from '../utils/auth';
+import { Hono } from 'hono';
+import { requireAuth, jsonResponse, errorResponse, ensureDefaultUser } from '../utils/auth';
 
-// 简单的密码哈希函数
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-const router = Router({ base: '/api/v1/resource' });
+const app = new Hono();
 
 // 获取资源列表 - 需要权限
-router.get('List', async (request) => {
-  const authError = await requireAuth(request);
+app.get('List', async (c) => {
+  const authError = await requireAuth(c);
   if (authError) return authError;
-  
+
   try {
-    const db = request.env.DB;
-    const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit')) || 20;
-    const offset = parseInt(url.searchParams.get('offset')) || 0;
+    const db = c.env.DB;
+    const limit = parseInt(c.req.query('limit')) || 20;
+    const offset = parseInt(c.req.query('offset')) || 0;
     
     const stmt = db.prepare(`
       SELECT r.id, r.filename, r.filepath, r.type, r.size, r.created_ts,
@@ -41,30 +31,50 @@ router.get('List', async (request) => {
   }
 });
 
-// 文件代理路由 - 无需权限
-router.get('/:id/file', async (request) => {
+// 文件代理路由 - 直接从 R2 读取并返回
+app.get('/:id/file', async (c) => {
   try {
-    const db = request.env.DB;
-    const { id } = request.params;
-    
+    const db = c.env.DB;
+    const bucket = c.env.BUCKET;
+    const id = c.req.param('id');
+
     const stmt = db.prepare(`
       SELECT id, filename, filepath, type, size
       FROM resources
       WHERE id = ?
     `);
-    
+
     const resource = await stmt.bind(id).first();
-    
+
     if (!resource) {
       return errorResponse('Resource not found', 404);
     }
-    
-    // 直接重定向到R2存储的URL
-    if (resource.filepath.startsWith('http')) {
-      return Response.redirect(resource.filepath, 302);
+
+    // 从 filepath 中提取 R2 对象的 key（文件名）
+    let objectKey = resource.filepath;
+
+    // 如果 filepath 是完整 URL，提取文件名部分
+    if (objectKey.startsWith('http')) {
+      const url = new URL(objectKey);
+      objectKey = url.pathname.substring(1); // 移除开头的 /
     }
-    
-    return errorResponse('Invalid resource path', 400);
+
+    // 从 R2 获取文件
+    const object = await bucket.get(objectKey);
+
+    if (!object) {
+      return errorResponse('File not found in storage', 404);
+    }
+
+    // 返回文件内容
+    return new Response(object.body, {
+      headers: {
+        'Content-Type': resource.type || 'application/octet-stream',
+        'Content-Length': resource.size?.toString() || '',
+        'Content-Disposition': `inline; filename="${encodeURIComponent(resource.filename)}"`,
+        'Cache-Control': 'public, max-age=31536000',
+      },
+    });
   } catch (error) {
     console.error('Error proxying resource:', error);
     return errorResponse('Failed to access resource', 500);
@@ -72,10 +82,10 @@ router.get('/:id/file', async (request) => {
 });
 
 // 获取单个资源 - 无需权限
-router.get('/:id', async (request) => {
+app.get('/:id', async (c) => {
   try {
-    const db = request.env.DB;
-    const { id } = request.params;
+    const db = c.env.DB;
+    const id = c.req.param('id');
     
     const stmt = db.prepare(`
       SELECT id, filename, filepath, type, size, created_ts
@@ -102,80 +112,136 @@ router.get('/:id', async (request) => {
 });
 
 // 上传资源 - 需要权限
-router.post('/', async (request) => {
-  const authError = await requireAuth(request);
+app.post('/', async (c) => {
+  const authError = await requireAuth(c);
   if (authError) return authError;
-  
+
   try {
-    const db = request.env.DB;
-    const bucket = request.env.BUCKET;
-    
-    const formData = await request.formData();
+    const db = c.env.DB;
+    const bucket = c.env.BUCKET;
+
+    const formData = await c.req.formData();
     const file = formData.get('file');
-    
+
     if (!file) {
       return errorResponse('No file provided');
     }
-    
-    // 生成唯一文件名
+
+    // 文件大小验证 (最大 50MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_FILE_SIZE) {
+      return errorResponse(`File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    }
+
+    // 文件类型白名单验证 - 扩展支持更多类型
+    const ALLOWED_TYPES = [
+      // 图片
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/svg+xml',
+      'image/bmp',
+      'image/tiff',
+      // 文档
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'text/html',
+      'text/css',
+      'text/javascript',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      // 压缩文件
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/x-rar-compressed',
+      'application/x-7z-compressed',
+      'application/gzip',
+      'application/x-tar',
+      // 视频
+      'video/mp4',
+      'video/mpeg',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-ms-wmv',
+      'video/webm',
+      // 音频
+      'audio/mpeg',
+      'audio/wav',
+      'audio/ogg',
+      'audio/webm',
+      'audio/mp4',
+      // 其他
+      'application/json',
+      'text/csv',
+      'application/xml',
+      'text/xml'
+    ];
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return errorResponse(`File type '${file.type}' is not allowed. Allowed types: images, videos, audio, PDF, documents, and archives.`);
+    }
+
+    // 文件名验证 (防止路径遍历攻击)
+    const filename = file.name;
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return errorResponse('Invalid filename');
+    }
+
+    // 获取创建者ID（从认证信息获取）
+    let creatorId = c.get('user')?.id;
+
+    // 如果没有用户信息，使用默认管理员
+    if (!creatorId) {
+      creatorId = await ensureDefaultUser(c.env.DB);
+    }
+
+    // 生成文件名：用户ID_时间戳.后缀
     const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 15);
     const fileExtension = file.name.split('.').pop();
-    const uniqueFilename = `${timestamp}_${randomString}.${fileExtension}`;
-    
+    const uniqueFilename = `${creatorId}_${timestamp}.${fileExtension}`;
+
     // 上传到R2存储
     const uploadResult = await bucket.put(uniqueFilename, file.stream(), {
       httpMetadata: {
         contentType: file.type,
       },
     });
-    
+
     if (!uploadResult) {
       return errorResponse('Failed to upload file', 500);
     }
-    
-    // 构建访问URL - 使用环境变量或默认域名
-    const r2Domain = request.env.R2_DOMAIN || 'pub-7f9c6818d8c543e2bb3b3bc7c81c3d5b.r2.dev';
-    const fileUrl = `https://${r2Domain}/${uniqueFilename}`;
-    
-    // 获取创建者ID（从认证信息获取）
-    let creatorId = request.user?.id;
-    
-    // 如果没有用户信息，使用默认管理员
-    if (!creatorId) {
-      const userCheck = await db.prepare('SELECT COUNT(*) as count FROM users').first();
-      if (userCheck.count === 0) {
-        // 创建默认用户 - 使用中文名称
-        const userStmt = db.prepare(`
-          INSERT INTO users (username, nickname, password_hash, is_admin) 
-          VALUES (?, ?, ?, 1)
-        `);
-        const defaultPasswordHash = await hashPassword('admin123');
-        const userResult = await userStmt.bind('admin', '管理员', defaultPasswordHash).run();
-        creatorId = userResult.meta.last_row_id;
-      } else {
-        creatorId = 1; // 使用第一个用户
-      }
-    }
-    
-    // 保存资源信息到数据库
+
+    // 保存资源信息到数据库 - filepath 存储文件名
     const stmt = db.prepare(`
       INSERT INTO resources (creator_id, filename, filepath, type, size)
       VALUES (?, ?, ?, ?, ?)
     `);
-    
+
     const result = await stmt.bind(
       creatorId,
       file.name,
-      fileUrl,
+      uniqueFilename,  // 存储文件名
       file.type,
       file.size
     ).run();
-    
+
+    const resourceId = result.meta.last_row_id;
+
+    // 获取 Worker 的 URL（从请求中获取）
+    const workerUrl = new URL(c.req.url).origin;
+    const fileUrl = `${workerUrl}/${uniqueFilename}`;
+
     return jsonResponse({
-      id: result.meta.last_row_id,
+      id: resourceId,
       filename: file.name,
-      filepath: fileUrl,
+      filepath: fileUrl,  // 返回完整 URL
       type: file.type,
       size: file.size,
       message: 'File uploaded successfully'
@@ -186,6 +252,4 @@ router.post('/', async (request) => {
   }
 });
 
-export async function handleResourceRoutes(request) {
-  return router.handle(request);
-}
+export default app;

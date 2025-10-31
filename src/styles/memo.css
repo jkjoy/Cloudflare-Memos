@@ -1,0 +1,154 @@
+/* Memo 时间线样式 */
+.items {
+  margin-top: 20px;
+  margin-left: 28px;
+}
+
+.item {
+  transition: 0.2s ease;
+}
+
+.time-box {
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.time-box > .dot {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--dot-size);
+  background-color: var(--link-color);
+}
+
+.time-box > .time {
+  flex: 1;
+  color: var(--link-color);
+  font-size: 14px;
+  font-weight: 500;
+  padding-left: 10px;
+}
+
+.memo-box {
+  border-left: 2px solid var(--border-color);
+  padding: 30px 0 30px 30px;
+  margin-left: 3px;
+}
+
+.memo-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.memo-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 100%;
+  border: 3px solid #fff;
+  box-shadow: var(--shadows);
+}
+
+.memo-author-info {
+  flex: 1;
+}
+
+.memo-author-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+.memo-author-username {
+  font-size: 14px;
+  color: var(--secondary-color);
+}
+
+.memo-pinned-badge {
+  background: var(--highlight-color);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.memo-content {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.memo-content p:first-child {
+  margin-top: 0;
+}
+
+.memo-content p:last-child {
+  margin-bottom: 0;
+}
+
+.memo-resources {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.memo-resource {
+  display: block;
+  padding: 10px;
+  background: var(--code-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--box-border-radius);
+  text-decoration: none;
+  color: var(--secondary-color);
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.memo-resource:hover {
+  background: var(--cell-background-color);
+  border-color: var(--link-color);
+  color: var(--link-color);
+  text-decoration: none;
+  box-shadow: var(--shadows);
+}
+
+.memo-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.memo-link {
+  color: var(--link-color);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: var(--box-border-radius);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.memo-link:hover {
+  background: var(--cell-background-color);
+  box-shadow: var(--shadows);
+  text-decoration: none;
+}
+
+/* 响应式 */
+@media screen and (max-width: 600px) {
+  .items {
+    margin-left: 0;
+  }
+
+  .memo-box {
+    padding-left: 20px;
+  }
+}
