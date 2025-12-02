@@ -27,28 +27,38 @@
 
 ### 手动部署
 
-```bash
+
 # 1. 安装依赖
+```bash
 npm install
-
+```
 # 2. 登录 Cloudflare
+```bash
 wrangler login
-
+```
 # 3. 创建数据库
+```bash
 wrangler d1 create memos_db
+```
+# 4. 更新 wrangler.toml 中的 `database_id`
 
-# 4. 更新 wrangler.toml 中的 database_id
+将 `wrangler.toml` 文件中的 `database_id` 更新为上一步创建的数据库 ID。
 
 # 5. 初始化数据库
-wrangler d1 execute memos_db --file=./schema.sql
+```bash
+wrangler d1 execute memos_db --file=./schema.sql --remote
+```
 
 # 6. 创建存储桶
-wrangler r2 bucket create memos-bucket
+```bash
+wrangler r2 bucket create memos
+```
 
-# 7. 设置访问令牌
-wrangler secret put TOKEN
+~~# 7. 设置访问令牌~~
+~~wrangler secret put TOKEN~~
 
 # 8. 部署
+```bash
 wrangler deploy
 ```
 
@@ -116,7 +126,7 @@ X-Token: YOUR_TOKEN
 ## 📂 项目结构
 
 ```
-memosnew/
+memos/
 ├── src/
 │   ├── handlers/          # API 处理器
 │   │   ├── memos.js      # 备忘录接口

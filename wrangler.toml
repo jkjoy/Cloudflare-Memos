@@ -1,19 +1,10 @@
-name = "memosnew"
+name = "memos"
 main = "src/index.js"
 compatibility_date = "2024-01-15"
 compatibility_flags = ["nodejs_compat"]
 
-# 配置文件导入规则
-[[rules]]
-type = "Data"
-globs = ["**/*.ico"]
-fallthrough = true
-
 [env.production.vars]
 ENVIRONMENT = "production"
-
-[env.development.vars]
-ENVIRONMENT = "development"
 
 [[d1_databases]]
 binding = "DB"
