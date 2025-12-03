@@ -1,7 +1,3 @@
--- 设置 UTF-8 编码
-PRAGMA encoding = 'UTF-8';
-PRAGMA foreign_keys = ON;
-
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
