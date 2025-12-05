@@ -566,9 +566,131 @@ ${generateFooter()}
 
     window.loadMoreMemos = loadMoreMemos;
 
+    // 初始加载广场的 memos
+    async function loadExploreMemos() {
+        try {
+            // 获取公开的 memos
+            const response = await fetch('/api/v1/memo?limit=20&offset=0');
+            if (!response.ok) {
+                console.error('Failed to load explore memos');
+                return;
+            }
+
+            const memos = await response.json();
+
+            // 清空现有列表
+            const itemsContainer = document.querySelector('.items');
+            if (!itemsContainer) return;
+
+            itemsContainer.innerHTML = '';
+
+            // 如果没有 memos，显示提示
+            if (!memos || memos.length === 0) {
+                itemsContainer.innerHTML = '<div class="empty-state"><p>广场上还很空</p></div>';
+                return;
+            }
+
+            // 渲染 memos
+            for (const memo of memos) {
+                const avatarHash = memo.creatorEmailHash || 'default';
+                const avatarUrl = \`https://gravatar.loli.net/avatar/\${avatarHash}?s=40&d=identicon\`;
+                const date = new Date(memo.createdTs * 1000);
+                const dateStr = date.toLocaleDateString('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'});
+
+                const imageResources = memo.resourceList ? memo.resourceList.filter(r => r.type && r.type.startsWith('image/')) : [];
+                const otherResources = memo.resourceList ? memo.resourceList.filter(r => !r.type || !r.type.startsWith('image/')) : [];
+
+                const imageCount = imageResources.length;
+                let gridColumns = 3;
+                if (imageCount === 1) {
+                    gridColumns = 1;
+                } else if (imageCount === 2) {
+                    gridColumns = 2;
+                } else if (imageCount === 4) {
+                    gridColumns = 2;
+                }
+
+                let imagesHTML = '';
+                if (imageResources.length > 0) {
+                    imagesHTML = \`<div class="image-grid" style="display: grid; grid-template-columns: repeat(\${gridColumns}, 1fr); max-width: 100%; gap: 10px; margin-top: 16px;">\`;
+                    imageResources.forEach(resource => {
+                        const imgUrl = resource.externalLink || \`/api/v1/resource/\${resource.id}/file\`;
+                        imagesHTML += \`<div class="image-item" style="width: 100%; padding-bottom: 100%; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--sepia-border); cursor: pointer;" onclick="openImageModal('\${imgUrl}')">
+                            <img src="\${imgUrl}" alt="\${resource.filename}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;">
+                        </div>\`;
+                    });
+                    imagesHTML += '</div>';
+                }
+
+                let otherResourcesHTML = '';
+                if (otherResources.length > 0) {
+                    otherResourcesHTML = '<div class="memo-resources" style="margin-top: 16px;">';
+                    otherResources.forEach(resource => {
+                        const fileUrl = resource.externalLink || \`/api/v1/resource/\${resource.id}/file\`;
+                        otherResourcesHTML += \`<a href="\${fileUrl}" class="memo-resource" target="_blank" style="display: inline-block; margin-right: 12px; margin-bottom: 8px; padding: 6px 12px; border: 1px solid var(--sepia-border); border-radius: 4px; text-decoration: none; color: var(--sepia-text);">📎 \${resource.filename}</a>\`;
+                    });
+                    otherResourcesHTML += '</div>';
+                }
+
+                let tagsHTML = '';
+                if (memo.tagList && memo.tagList.length > 0) {
+                    tagsHTML = memo.tagList.map(tag =>
+                        \`<a href="/tag/\${encodeURIComponent(tag.name)}" style="display: inline-block; margin-left: 2px; padding: 2px 2px; background: var(--sepia-surface); border: 1px solid var(--sepia-border); border-radius: 2px; font-size: 12px; text-decoration: none; color:#C0C0C0;">#\${tag.name}</a>\`
+                    ).join('');
+                }
+
+                const memoHTML = \`
+<div class="item">
+    <div class="time-box">
+        <div class="dot"></div>
+        <div class="time" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <img src="\${avatarUrl}" alt="头像" style="width: 30px; height: 30px; border-radius: 100%; border: 2px solid #fff; box-shadow: var(--shadows);">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <a href="/user/\${memo.creatorId}" style="display: flex; align-items: center; gap: 8px; text-decoration: none;"><span style="color: var(--foreground-color); font-weight: 500; font-size: 14px;">\${memo.creatorName || memo.creatorUsername || '匿名'}</span>
+                    </a>
+                </div>
+            <span style="color: var(--secondary-color);">·</span>
+            <a href="/m/\${memo.id}" class="time" style="color: var(--highlight-color);">\${dateStr}</a>
+            \${memo.pinned ? '<span style="display: inline-block; background: var(--highlight-color); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-left: 4px;">置顶</span>' : ''}
+            \${tagsHTML}
+        </div>
+    </div>
+    <div class="memo-box">
+        <div class="memo-content markdown-content" id="memo-\${memo.id}" data-raw-content=""></div>
+        \${imagesHTML}
+        \${otherResourcesHTML}
+    </div>
+</div>\`;
+                itemsContainer.insertAdjacentHTML('beforeend', memoHTML);
+
+                // 使用 textContent 设置内容（自动转义 HTML）
+                const newMemoEl = document.getElementById(\`memo-\${memo.id}\`);
+                if (newMemoEl) {
+                    newMemoEl.textContent = memo.content || '';
+
+                    if (typeof marked !== 'undefined') {
+                        try {
+                            const content = newMemoEl.textContent;
+                            const parsed = marked.parse(content);
+                            newMemoEl.innerHTML = parsed;
+                            processMarkdownImages(newMemoEl);
+                        } catch (error) {
+                            console.error('Error rendering markdown for memo', memo.id, error);
+                        }
+                    }
+                }
+            }
+
+            // 为所有代码块添加复制按钮
+            addCopyButtonToCodeBlocks();
+        } catch (error) {
+            console.error('Error loading explore memos:', error);
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', async function() {
         await checkLoginStatus();
-        renderMarkdown();
+        await loadExploreMemos();
         loadHeatmap();
     });
 </script>
